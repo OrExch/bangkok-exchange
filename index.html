@@ -69,16 +69,6 @@
   .btn-line { border: 1px solid var(--border); color: var(--text); background: var(--card); }
   .btn-line:hover { border-color: var(--cyan); }
 
-  /* Ticker */
-  .ticker { border-block: 1px solid var(--border); background: rgba(5, 11, 20, .6); overflow: hidden; white-space: nowrap; }
-  .ticker-track { display: inline-flex; gap: 48px; padding: 12px 0; animation: scroll 40s linear infinite; }
-  .ticker:hover .ticker-track { animation-play-state: paused; }
-  .tick { font: 500 13px "JetBrains Mono", monospace; color: var(--muted); display: inline-flex; gap: 10px; }
-  .tick b { color: var(--text); }
-  .tick .up { color: var(--up); }
-  .tick .down { color: var(--down); }
-  @keyframes scroll { to { transform: translateX(-50%); } }
-
   /* Hero */
   .hero { padding: 80px 0 90px; text-align: center; }
   .badge { display: inline-flex; gap: 10px; align-items: center; padding: 8px 16px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--muted); background: var(--card); }
@@ -202,10 +192,6 @@
   </div>
 </header>
 
-<div class="ticker">
-  <div class="ticker-track" id="ticker"><span class="tick">…</span></div>
-</div>
-
 <main>
   <div class="wrap hero">
     <span class="badge" id="badge"><i></i><span id="badge-text">Подключаемся…</span></span>
@@ -328,7 +314,6 @@
 
 <script>
   const RATE_URL = "rate.js";
-  const TICKER_API = "https://api.rapira.net/open/market/rates";
   const LOCAL = "THB";
   const SYMBOL = "฿";
   const $ = (id) => document.getElementById(id);
@@ -355,7 +340,6 @@
       "badge.ok": "Курс обновлён в ",
       "badge.error": "Курс временно недоступен — уточните в Telegram",
       "rate.na": "Уточняется",
-      "ticker.error": "Котировки временно недоступны",
     },
     en: {
       "meta.title": "Siam Swap — rubles and USDT ⇄ baht in Bangkok",
@@ -406,7 +390,6 @@
       "badge.ok": "Rate updated at ",
       "badge.error": "Rate temporarily unavailable — ask on Telegram",
       "rate.na": "On request",
-      "ticker.error": "Market data temporarily unavailable",
     },
   };
   document.querySelectorAll("[data-i18n]").forEach((el) => { I18N.ru[el.dataset.i18n] ??= el.innerHTML; });
@@ -414,7 +397,6 @@
   let lang = "ru";
   let quote = null;
   let status = "loading";
-  let tickerData = null;
   let base = "rub";
   let toLocal = true;
 
@@ -435,40 +417,12 @@
     document.querySelectorAll("[data-i18n]").forEach((el) => { el.innerHTML = t(el.dataset.i18n); });
     document.querySelectorAll("[data-lang]").forEach((b) => b.classList.toggle("active", b.dataset.lang === lang));
     render();
-    renderTicker();
   }
 
   function detectLang() {
     let saved = null;
     try { saved = localStorage.getItem("lang"); } catch (e) {}
     return new URLSearchParams(location.search).get("lang") || saved || (navigator.language.startsWith("ru") ? "ru" : "en");
-  }
-
-  function renderTicker() {
-    if (tickerData === null) return;
-    if (tickerData === "error") {
-      $("ticker").innerHTML = `<span class="tick">${t("ticker.error")}</span>`;
-      return;
-    }
-    const items = tickerData.map((p) => {
-      const pct = (p.chg * 100).toFixed(2);
-      const cls = p.chg >= 0 ? "up" : "down";
-      const sign = p.chg >= 0 ? "+" : "";
-      const digits = p.close < 1 ? 4 : 2;
-      return `<span class="tick">${p.symbol} <b>${fmt(p.close, digits)}</b> <span class="${cls}">${sign}${pct}%</span></span>`;
-    }).join("");
-    $("ticker").innerHTML = items + items;
-  }
-
-  async function loadTicker() {
-    try {
-      const res = await fetch(TICKER_API, { cache: "no-store" });
-      const json = await res.json();
-      tickerData = json.data.filter((p) => p.symbol !== "USDT/RUB");
-    } catch (e) {
-      if (!Array.isArray(tickerData)) tickerData = "error";
-    }
-    renderTicker();
   }
 
   function fetchRate() {
@@ -542,9 +496,7 @@
 
   setLang(detectLang());
   loadRates();
-  loadTicker();
   setInterval(loadRates, 60000);
-  setInterval(loadTicker, 30000);
 </script>
 </body>
 </html>
