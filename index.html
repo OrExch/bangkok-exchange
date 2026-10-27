@@ -313,7 +313,10 @@
 </footer>
 
 <script>
+  const RATE_API = "https://api.coinbase.com/v2/exchange-rates?currency=USD";
   const RATE_URL = "rate.js";
+  // При MARKUP > 0 наценка идёт в пользу сервиса: клиент получает меньше и платит больше рыночного курса.
+  const MARKUP = 0;
   const LOCAL = "THB";
   const SYMBOL = "฿";
   const $ = (id) => document.getElementById(id);
@@ -425,7 +428,24 @@
     return new URLSearchParams(location.search).get("lang") || saved || (navigator.language.startsWith("ru") ? "ru" : "en");
   }
 
-  function fetchRate() {
+  async function fetchLiveRate() {
+    const res = await fetch(RATE_API, { cache: "no-store" });
+    if (!res.ok) throw new Error(`Coinbase responded ${res.status}`);
+    const { rates } = (await res.json()).data;
+    const usdLocal = Number(rates[LOCAL]);
+    const usdRub = Number(rates.RUB);
+    if (!(usdLocal > 0 && usdRub > 0)) throw new Error("Invalid rate from Coinbase");
+    const rubPerLocal = usdRub / usdLocal;
+    return {
+      usdtToLocal: usdLocal * (1 - MARKUP),
+      localToUsdt: usdLocal * (1 + MARKUP),
+      rubToLocal: rubPerLocal * (1 + MARKUP),
+      localToRub: rubPerLocal * (1 - MARKUP),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  function fetchFallbackRate() {
     return new Promise((resolve, reject) => {
       const s = document.createElement("script");
       s.src = RATE_URL + "?t=" + Date.now();
@@ -437,11 +457,18 @@
 
   async function loadRates() {
     try {
-      const json = await fetchRate();
-      quote = { ...json[LOCAL], updatedAt: json.updatedAt };
+      quote = await fetchLiveRate();
       status = "ok";
     } catch (e) {
-      if (!quote) status = "error";
+      try {
+        const json = await fetchFallbackRate();
+        if (!quote || new Date(json.updatedAt) > new Date(quote.updatedAt)) {
+          quote = { ...json[LOCAL], updatedAt: json.updatedAt };
+        }
+        status = "ok";
+      } catch (e2) {
+        if (!quote) status = "error";
+      }
     }
     render();
   }
@@ -496,7 +523,7 @@
 
   setLang(detectLang());
   loadRates();
-  setInterval(loadRates, 60000);
+  setInterval(loadRates, 30000);
 </script>
 </body>
 </html>
